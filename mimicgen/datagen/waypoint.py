@@ -318,6 +318,7 @@ class WaypointTrajectory(object):
         video_writer=None, 
         video_skip=5, 
         camera_names=None,
+        actuation_mode="arm"
     ):
         """
         Main function to execute the trajectory. Will use env_interface.target_pose_to_action to
@@ -378,18 +379,29 @@ class WaypointTrajectory(object):
                 obs = env.get_observation()
 
                 # convert target pose to arm action
-                action_pose = env_interface.target_pose_to_action(target_pose=waypoint.pose)
+                if actuation_mode == "arm":
+                    action_pose = env_interface.target_pose_to_action(target_pose=waypoint.pose)
+                    # maybe add noise to action
+                    if waypoint.noise is not None:
+                        action_pose += waypoint.noise * np.random.randn(*action_pose.shape)
+                        action_pose = np.clip(action_pose, -1., 1.)
 
-                # maybe add noise to action
-                if waypoint.noise is not None:
-                    action_pose += waypoint.noise * np.random.randn(*action_pose.shape)
-                    action_pose = np.clip(action_pose, -1., 1.)
+                    # add in gripper action
+                    play_action = np.concatenate([action_pose, waypoint.gripper_action], axis=0)
 
-                # add in gripper action
-                play_action = np.concatenate([action_pose, waypoint.gripper_action], axis=0)
+                    # mobile base action
+                    play_action = np.concatenate([play_action, [0, 0, 0, 0], [-1]], axis=0)
+                elif actuation_mode == "base":
+                    action_pose = env_interface.target_base_pose_to_action(target_base_pose=waypoint.pose)
+                    # maybe add noise to action
+                    if waypoint.noise is not None:
+                        action_pose += waypoint.noise * np.random.randn(*action_pose.shape)
+                        action_pose = np.clip(action_pose, -1., 1.)
+                    # add in gripper action
+                    play_action = np.concatenate([[0] * 6, waypoint.gripper_action], axis=0)
 
-                # mobile base action
-                play_action = np.concatenate([play_action, [0, 0, 0, 0], [-1]], axis=0)
+                    # mobile base action
+                    play_action = np.concatenate([play_action, action_pose, [-1]], axis=0)
 
                 # store datagen info too
                 datagen_info = env_interface.get_datagen_info(action=play_action)

@@ -158,6 +158,85 @@ class RobosuiteInterface(MG_EnvInterface):
         # gripper action is right after arm action
         return action[6:7]
 
+    def target_base_pose_to_action(self, target_base_pose, relative=True):
+        """
+        Takes a target base pose and returns an action 
+        (usually a normalized delta pose action) to try and achieve that target pose. 
+
+        Args:
+            target_pose (np.array): 4x4 target base pose
+            relative (bool): if True, use relative pose actions, else absolute pose actions
+
+        Returns:
+            action (np.array): action compatible with env.step (base-only)
+        """
+
+        # version check for robosuite - must be v1.2+, so that we're using the correct controller convention
+        assert (robosuite.__version__.split(".")[0] == "1")
+        assert (robosuite.__version__.split(".")[1] >= "2")
+
+        # target position and rotation
+        target_pos, target_rot = PoseUtils.unmake_pose(target_base_pose)
+
+        # current position and rotation
+        curr_pose = self.get_robot_eef_pose()
+        curr_pos, curr_rot = PoseUtils.unmake_pose(curr_pose)
+
+        # functions to convert delta poses to actions
+        def delta_to_action(delta):
+            # input: 3d array indicating intended delta in xy and heading
+            # output: 3d array with the same size
+            delta_x, delta_y, delta_heading = delta[0], delta[1], delta[2]
+            if np.abs(delta_x) > 0.00025:
+                if delta_x > 0:
+                    a_x = np.clip(delta_x - 0.00025 + 0.25, -1, 1)
+                else:
+                    a_x = np.clip(delta_x + 0.00025 - 0.25, -1, 1)
+            else:
+                a_x = np.clip(delta_x * 1e3, -1, 1)
+            if delta_y > 0.00025:
+                if delta_y > 0:
+                    a_y = np.clip(delta_y - 0.00025 + 0.25, -1, 1)
+                else:
+                    a_y = np.clip(delta_y + 0.00025 - 0.25, -1, 1)
+            else:
+                a_y = np.clip(delta_y * 1e3, -1, 1)
+            a_heading = np.clip(delta_heading / 0.0629, -1, 1)
+            return np.array([a_x, a_y, a_heading])
+
+        curr_base_pos, curr_base_rot = self.get_controller_base_pose()
+
+        if relative:
+            # normalized delta position action
+            delta_position = target_pos - curr_pos
+
+            # normalized delta rotation action
+            delta_rot_mat = target_rot.dot(curr_rot.T)
+            delta_quat = T.mat2quat(delta_rot_mat)
+            delta_rotation = T.quat2axisangle(delta_quat)
+
+            # convert to action in base frame
+            base_angle = T.quat2axisangle(T.mat2quat(curr_base_rot))[2]
+            x_w = delta_position[0]
+            y_w = delta_position[1]
+            x_r = np.cos(base_angle) * x_w + np.sin(base_angle) * y_w
+            y_r = -np.sin(base_angle) * x_w + np.cos(base_angle) * y_w
+            delta_position[0] = x_r
+            delta_position[1] = y_r
+            roll_w = delta_rotation[0]
+            pitch_w = delta_rotation[1]
+            roll_r = np.cos(base_angle) * roll_w + np.sin(base_angle) * pitch_w
+            pitch_r = -np.sin(base_angle) * roll_w + np.cos(base_angle) * pitch_w
+            delta_rotation[0] = roll_r
+            delta_rotation[1] = pitch_r
+
+            return delta_to_action(np.concatenate([delta_position, delta_rotation])[[0, 1, 5]])
+
+        # absolute position and rotation action
+        target_quat = T.mat2quat(target_rot)
+        abs_rotation = T.quat2axisangle(target_quat)
+        return np.concatenate([target_pos, abs_rotation])[[0, 1, 5]]
+
     # robosuite-specific helper method for getting object poses
     def get_object_pose(self, obj_name, obj_type):
         """

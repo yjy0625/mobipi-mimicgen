@@ -97,6 +97,7 @@ def generate_dataset(
     video_skip=5,
     render_image_names=None,
     pause_subtask=False,
+    run_nav=False,
 ):
     """
     Main function to collect a new dataset with MimicGen.
@@ -316,6 +317,7 @@ def generate_dataset(
             video_skip=video_skip,
             camera_names=render_image_names,
             pause_subtask=pause_subtask,
+            run_nav=run_nav,
         )
         # except exceptions_to_except as e:
         #     # problematic trajectory - do not have this count towards our total number of attempts, and re-try
@@ -563,6 +565,7 @@ def main(args):
             video_skip=args.video_skip,
             render_image_names=args.render_image_names,
             pause_subtask=args.pause_subtask,
+            run_nav=args.run_nav,
         )
     except Exception as e:
         res_str = "run failed with error:\n{}\n\n{}".format(e, traceback.format_exc())
@@ -649,6 +652,11 @@ if __name__ == "__main__":
         type=int,
         help="seed, to override the one in the config",
         default=None,
+    )
+    parser.add_argument(
+        "--run_nav",
+        action='store_true',
+        help="include navigation in data",
     )
 
     args = parser.parse_args()

@@ -9,6 +9,8 @@ import h5py
 import sys
 import numpy as np
 
+import robosuite.utils.transform_utils as T
+
 import mimicgen
 import mimicgen.utils.pose_utils as PoseUtils
 import mimicgen.utils.file_utils as MG_FileUtils
@@ -195,6 +197,7 @@ class DataGenerator(object):
         video_skip=5,
         camera_names=None,
         pause_subtask=False,
+        run_nav=False,
     ):
         """
         Attempt to generate a new demonstration.
@@ -243,6 +246,8 @@ class DataGenerator(object):
         """
 
         # sample new task instance
+        if run_nav:
+            env.base_env.place_robot_for_nav = True
         env.reset()
         new_initial_state = env.get_state()
 
@@ -262,6 +267,99 @@ class DataGenerator(object):
         generated_src_demo_inds = [] # store selected src demo ind for each subtask in each trajectory
         generated_src_demo_labels = [] # like @generated_src_demo_inds, but padded to align with size of @generated_actions
 
+        # optinally run navigation towards station
+        if run_nav:
+            def to_mat(pos, rot):
+                pose_matrix = np.eye(4)
+                pose_matrix[:3, :3] = rot
+                pose_matrix[:3, 3] = pos
+                return pose_matrix
+
+            # interpolation parameters setting max velocity
+            max_rot_per_step = 1.258 / 20
+            max_dist_per_step = 0.744 / 20
+            def compute_num_steps(dists):
+                dists[2] = np.mod(dists[2], np.pi * 2) - np.pi # use closest rotation
+                dists = np.abs(dists)
+                num_steps = np.max(np.ceil(dists / np.array([max_dist_per_step, max_dist_per_step, max_rot_per_step])))
+                return int(num_steps)
+
+            # generate waypoints for navigation
+            init_base_pos, init_base_rot = env_interface.get_controller_base_pose()
+            init_base_angle = T.quat2axisangle(T.mat2quat(np.array(init_base_rot)))[2]
+            init_base_pose = np.array([init_base_pos[0], init_base_pos[1], init_base_angle])
+            target_base_pos, target_base_axisangle = env.base_env._default_init_robot_pos, env.base_env._default_init_robot_ori
+            target_base_rot = T.quat2mat(T.axisangle2quat(target_base_axisangle))
+            target_base_angle = target_base_axisangle[2]
+            target_base_pose = np.array([target_base_pos[0], target_base_pos[1], target_base_angle])
+            traj_to_execute = WaypointTrajectory()
+            nav_gripper_action = env.base_env.robots[0].gripper["right"].current_action
+            init_sequence = WaypointSequence.from_poses(
+                poses=to_mat(init_base_pos, init_base_rot)[None],
+                gripper_actions=nav_gripper_action[None],
+                action_noise=0.0,
+            )
+            traj_to_execute.add_waypoint_sequence(init_sequence)
+
+            vec_init_to_target = target_base_pos - init_base_pos
+            nav_heading = np.array([0, 0, np.arctan2(vec_init_to_target[1], vec_init_to_target[0])])
+            waypoint1_pose = np.array([init_base_pos[0], init_base_pos[1], nav_heading[-1]])
+            waypoint1_num_steps = compute_num_steps(init_base_pose - waypoint1_pose)
+            nav_rot = T.quat2mat(T.axisangle2quat(nav_heading))
+            if waypoint1_num_steps > 0:
+                traj_to_execute.add_waypoint_sequence_for_target_pose(
+                    pose=to_mat(init_base_pos, nav_rot),
+                    gripper_action=nav_gripper_action,
+                    num_steps=waypoint1_num_steps,
+                    action_noise=0.0,
+                    skip_interpolation=False
+                )
+
+            waypoint2_pose = np.array([target_base_pos[0], target_base_pos[1], nav_heading[-1]])
+            waypoint2_num_steps = compute_num_steps(waypoint1_pose - waypoint2_pose)
+            if waypoint2_num_steps > 0:
+                traj_to_execute.add_waypoint_sequence_for_target_pose(
+                    pose=to_mat(target_base_pos, nav_rot),
+                    gripper_action=nav_gripper_action,
+                    num_steps=waypoint2_num_steps,
+                    action_noise=0.0,
+                    skip_interpolation=False
+                )
+
+            waypoint3_num_steps = compute_num_steps(waypoint2_pose - target_base_pose)
+            if waypoint3_num_steps > 0:
+                traj_to_execute.add_waypoint_sequence_for_target_pose(
+                    pose=to_mat(target_base_pos, target_base_rot),
+                    gripper_action=nav_gripper_action,
+                    num_steps=waypoint3_num_steps,
+                    action_noise=0.0,
+                    skip_interpolation=False
+                )
+
+            # run navigation and collect transition data
+            traj_to_execute.pop_first()
+
+            # Execute the trajectory and collect data.
+            exec_results = traj_to_execute.execute(
+                env=env,
+                env_interface=env_interface,
+                render=render,
+                video_writer=video_writer,
+                video_skip=video_skip,
+                camera_names=camera_names,
+                actuation_mode="base"
+            )
+
+            # check that trajectory is non-empty
+            if len(exec_results["states"]) > 0:
+                generated_states += exec_results["states"]
+                generated_obs += exec_results["observations"]
+                generated_datagen_infos += exec_results["datagen_infos"]
+                generated_actions.append(exec_results["actions"])
+                generated_success = generated_success or exec_results["success"]
+                generated_src_demo_inds.append(-1)
+                generated_src_demo_labels.append((-1) * np.ones((exec_results["actions"].shape[0], 1), dtype=int))
+        
         for subtask_ind in range(len(self.task_spec)):
 
             # some things only happen on first subtask
