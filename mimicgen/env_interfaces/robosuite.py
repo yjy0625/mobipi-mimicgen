@@ -177,46 +177,39 @@ class RobosuiteInterface(MG_EnvInterface):
 
         # target position and rotation
         target_pos, target_rot = PoseUtils.unmake_pose(target_base_pose)
+        target_angle = T.quat2axisangle(T.mat2quat(target_rot))[2]
 
         # current position and rotation
-        curr_pose = self.get_robot_eef_pose()
-        curr_pos, curr_rot = PoseUtils.unmake_pose(curr_pose)
+        # curr_pose = self.get_robot_eef_pose()
+        # curr_pos, curr_rot = PoseUtils.unmake_pose(curr_pose)
 
         # functions to convert delta poses to actions
-        def delta_to_action(delta):
+        def delta_xy_to_action(delta):
             # input: 3d array indicating intended delta in xy and heading
             # output: 3d array with the same size
-            delta_x, delta_y, delta_heading = delta[0], delta[1], delta[2]
-            if np.abs(delta_x) > 0.00025:
-                if delta_x > 0:
-                    a_x = np.clip(delta_x - 0.00025 + 0.25, -1, 1)
-                else:
-                    a_x = np.clip(delta_x + 0.00025 - 0.25, -1, 1)
-            else:
-                a_x = np.clip(delta_x * 1e3, -1, 1)
-            if delta_y > 0.00025:
-                if delta_y > 0:
-                    a_y = np.clip(delta_y - 0.00025 + 0.25, -1, 1)
-                else:
-                    a_y = np.clip(delta_y + 0.00025 - 0.25, -1, 1)
-            else:
-                a_y = np.clip(delta_y * 1e3, -1, 1)
-            a_heading = np.clip(delta_heading / 0.0629, -1, 1)
-            return np.array([a_x, a_y, a_heading])
+            v = delta * 20
+            return (np.abs(v) > 0.00025) * np.clip(v + (0.25 - 0.00025) * np.sign(v), -1, 1) + (np.abs(v) <= 0.00025) * (v * 1e3)
+
+        def delta_heading_to_action(delta):
+            return np.clip(delta / (0.744 / 20), -1, 1)
 
         curr_base_pos, curr_base_rot = self.get_controller_base_pose()
 
         if relative:
             # normalized delta position action
-            delta_position = target_pos - curr_pos
+            delta_position = target_pos - curr_base_pos
+            delta_position = delta_xy_to_action(delta_position)
+            # delta_position = np.clip(delta_position / (1.258 / 20), -1., 1.)
 
             # normalized delta rotation action
-            delta_rot_mat = target_rot.dot(curr_rot.T)
+            delta_rot_mat = target_rot.dot(curr_base_rot.T)
             delta_quat = T.mat2quat(delta_rot_mat)
             delta_rotation = T.quat2axisangle(delta_quat)
+            delta_rotation = delta_heading_to_action(delta_rotation)
 
             # convert to action in base frame
             base_angle = T.quat2axisangle(T.mat2quat(curr_base_rot))[2]
+            print(f"Target pose: {target_pos[:2].round(4)} {target_angle:.4f}; Curr base pose: {curr_base_pos[:2].round(4)} {base_angle:.4f}")
             x_w = delta_position[0]
             y_w = delta_position[1]
             x_r = np.cos(base_angle) * x_w + np.sin(base_angle) * y_w
@@ -230,7 +223,7 @@ class RobosuiteInterface(MG_EnvInterface):
             delta_rotation[0] = roll_r
             delta_rotation[1] = pitch_r
 
-            return delta_to_action(np.concatenate([delta_position, delta_rotation])[[0, 1, 5]])
+            return np.concatenate([delta_position, delta_rotation])[[0, 1, 5]]
 
         # absolute position and rotation action
         target_quat = T.mat2quat(target_rot)

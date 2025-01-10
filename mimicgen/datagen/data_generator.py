@@ -269,15 +269,17 @@ class DataGenerator(object):
 
         # optinally run navigation towards station
         if run_nav:
+            """
             def to_mat(pos, rot):
                 pose_matrix = np.eye(4)
                 pose_matrix[:3, :3] = rot
                 pose_matrix[:3, 3] = pos
                 return pose_matrix
+            """
 
             # interpolation parameters setting max velocity
-            max_rot_per_step = 1.258 / 20
-            max_dist_per_step = 0.744 / 20
+            max_rot_per_step = 1.0 / 20 # 1.258 / 20
+            max_dist_per_step = 0.5 / 20 # 0.744 / 20
             def compute_num_steps(dists):
                 dists[2] = np.mod(dists[2], np.pi * 2) - np.pi # use closest rotation
                 dists = np.abs(dists)
@@ -288,14 +290,19 @@ class DataGenerator(object):
             init_base_pos, init_base_rot = env_interface.get_controller_base_pose()
             init_base_angle = T.quat2axisangle(T.mat2quat(np.array(init_base_rot)))[2]
             init_base_pose = np.array([init_base_pos[0], init_base_pos[1], init_base_angle])
+
+            init_arm_mat_wrt_world = env_interface.get_robot_eef_pose()
+            init_arm_mat_wrt_base = np.dot(PoseUtils.pose_inv(PoseUtils.make_pose(init_base_pos, init_base_rot)),
+                                           init_arm_mat_wrt_world)
+
             target_base_pos, target_base_axisangle = env.base_env._default_init_robot_pos, env.base_env._default_init_robot_ori
             target_base_rot = T.quat2mat(T.axisangle2quat(target_base_axisangle))
             target_base_angle = target_base_axisangle[2]
             target_base_pose = np.array([target_base_pos[0], target_base_pos[1], target_base_angle])
             traj_to_execute = WaypointTrajectory()
-            nav_gripper_action = env.base_env.robots[0].gripper["right"].current_action
+            nav_gripper_action = env.base_env.robots[0].gripper["right"].current_action[0:1]
             init_sequence = WaypointSequence.from_poses(
-                poses=to_mat(init_base_pos, init_base_rot)[None],
+                poses=PoseUtils.make_pose(init_base_pos, init_base_rot)[None],
                 gripper_actions=nav_gripper_action[None],
                 action_noise=0.0,
             )
@@ -308,7 +315,7 @@ class DataGenerator(object):
             nav_rot = T.quat2mat(T.axisangle2quat(nav_heading))
             if waypoint1_num_steps > 0:
                 traj_to_execute.add_waypoint_sequence_for_target_pose(
-                    pose=to_mat(init_base_pos, nav_rot),
+                    pose=PoseUtils.make_pose(init_base_pos, nav_rot),
                     gripper_action=nav_gripper_action,
                     num_steps=waypoint1_num_steps,
                     action_noise=0.0,
@@ -319,7 +326,7 @@ class DataGenerator(object):
             waypoint2_num_steps = compute_num_steps(waypoint1_pose - waypoint2_pose)
             if waypoint2_num_steps > 0:
                 traj_to_execute.add_waypoint_sequence_for_target_pose(
-                    pose=to_mat(target_base_pos, nav_rot),
+                    pose=PoseUtils.make_pose(target_base_pos, nav_rot),
                     gripper_action=nav_gripper_action,
                     num_steps=waypoint2_num_steps,
                     action_noise=0.0,
@@ -329,7 +336,7 @@ class DataGenerator(object):
             waypoint3_num_steps = compute_num_steps(waypoint2_pose - target_base_pose)
             if waypoint3_num_steps > 0:
                 traj_to_execute.add_waypoint_sequence_for_target_pose(
-                    pose=to_mat(target_base_pos, target_base_rot),
+                    pose=PoseUtils.make_pose(target_base_pos, target_base_rot),
                     gripper_action=nav_gripper_action,
                     num_steps=waypoint3_num_steps,
                     action_noise=0.0,
@@ -347,7 +354,8 @@ class DataGenerator(object):
                 video_writer=video_writer,
                 video_skip=video_skip,
                 camera_names=camera_names,
-                actuation_mode="base"
+                actuation_mode="base",
+                fixed_arm_pose=init_arm_mat_wrt_base,
             )
 
             # check that trajectory is non-empty
@@ -443,6 +451,8 @@ class DataGenerator(object):
                     action_noise=self.task_spec[subtask_ind]["action_noise"],
                 )
             traj_to_execute.add_waypoint_sequence(init_sequence)
+
+            print(f"Subtask {subtask_ind} has action noise {self.task_spec[subtask_ind]['action_noise']}")
 
             # Construct trajectory for the transformed segment.
             transformed_seq = WaypointSequence.from_poses(
