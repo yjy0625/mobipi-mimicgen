@@ -209,7 +209,6 @@ class RobosuiteInterface(MG_EnvInterface):
 
             # convert to action in base frame
             base_angle = T.quat2axisangle(T.mat2quat(curr_base_rot))[2]
-            print(f"Target pose: {target_pos[:2].round(4)} {target_angle:.4f}; Curr base pose: {curr_base_pos[:2].round(4)} {base_angle:.4f}")
             x_w = delta_position[0]
             y_w = delta_position[1]
             x_r = np.cos(base_angle) * x_w + np.sin(base_angle) * y_w

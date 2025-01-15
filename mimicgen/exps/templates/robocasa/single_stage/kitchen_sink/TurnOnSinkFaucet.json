@@ -7,10 +7,11 @@
             "filter_key": "50_demos"
         },
         "generation": {
-            "path": "/juno/u/jingyuny/projects/p_mobilization/third_party/robocasa/datasets/v0.1/single_stage/kitchen_sink/TurnOnSinkFaucet/0109_mg_no_nav_d50",
+            "path": "/juno/u/jingyuny/projects/p_mobilization/third_party/robocasa/datasets/v0.1/single_stage/kitchen_sink/TurnOnSinkFaucet/mg_nav",
             "select_src_per_subtask": true,
-            "num_trials": 10,
-            "transform_first_robot_pose": true
+            "num_trials": 300,
+            "transform_first_robot_pose": true,
+            "guarantee": true
         }
     },
     "task": {

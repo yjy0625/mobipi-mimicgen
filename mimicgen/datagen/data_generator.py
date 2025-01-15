@@ -269,14 +269,6 @@ class DataGenerator(object):
 
         # optinally run navigation towards station
         if run_nav:
-            """
-            def to_mat(pos, rot):
-                pose_matrix = np.eye(4)
-                pose_matrix[:3, :3] = rot
-                pose_matrix[:3, 3] = pos
-                return pose_matrix
-            """
-
             # interpolation parameters setting max velocity
             max_rot_per_step = 1.0 / 20 # 1.258 / 20
             max_dist_per_step = 0.5 / 20 # 0.744 / 20
@@ -358,6 +350,11 @@ class DataGenerator(object):
                 fixed_arm_pose=init_arm_mat_wrt_base,
             )
 
+            # Print target vs achieved
+            curr_base_pos, curr_base_rot = env_interface.get_controller_base_pose()
+            base_angle = T.quat2axisangle(T.mat2quat(curr_base_rot))[2]
+            print(f"Target pose: {target_base_pos[:2].round(4)} {target_base_angle:.4f}; achieved pose: {curr_base_pos[:2].round(4)} {base_angle:.4f}")
+
             # check that trajectory is non-empty
             if len(exec_results["states"]) > 0:
                 generated_states += exec_results["states"]
@@ -433,7 +430,7 @@ class DataGenerator(object):
             else:
                 # skip transformation if no reference object is provided
                 transformed_eef_poses = src_eef_poses
-            
+
             # We will construct a WaypointTrajectory instance to keep track of robot control targets 
             # that will be executed and then execute it.
             traj_to_execute = WaypointTrajectory()

@@ -3,14 +3,15 @@
     "type": "robosuite",
     "experiment": {
         "source": {
-            "dataset_path": "~/robocasa/datasets/v0.1/single_stage/kitchen_drawer/CloseDrawer/2024-04-30/demo.hdf5",
+            "dataset_path": "/juno/u/jingyuny/projects/p_mobilization/third_party/robocasa/datasets/v0.1/single_stage/kitchen_drawer/CloseDrawer/2024-04-30/demo_gentex_im128_randcams.hdf5",
             "filter_key": "50_demos"
         },
         "generation": {
-            "path": "~/robocasa/datasets/v0.1/single_stage/kitchen_drawer/CloseDrawer/mg",
+            "path": "/juno/u/jingyuny/projects/p_mobilization/third_party/robocasa/datasets/v0.1/single_stage/kitchen_drawer/CloseDrawer/mg_nav",
             "select_src_per_subtask": true,
-            "num_trials": 3010,
-            "transform_first_robot_pose": true
+            "num_trials": 300,
+            "transform_first_robot_pose": true,
+            "guarantee": true
         }
     },
     "task": {
