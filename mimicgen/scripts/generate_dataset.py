@@ -143,16 +143,12 @@ def generate_dataset(
     # get environment metadata from dataset
     env_meta = get_env_metadata_from_dataset(dataset_path=source_dataset_path)
 
-    if env_meta["env_name"] == "CloseDrawer":
-        print(f"Close Drawer env!")
-        env_meta["env_kwargs"]["layout_ids"] = [3]
-    else:
-        print(f"Non drawer env!")
-        env_meta["env_kwargs"]["layout_ids"] = [0]
+    env_meta["env_kwargs"]["layout_ids"] = [0, 1, 2, 3, 4]
     env_meta["env_kwargs"]["style_ids"] = [3]
-    env_meta["env_kwargs"]["hard_reset"] = False
+    env_meta["env_kwargs"]["hard_reset"] = True
     env_meta["env_kwargs"]["generative_textures"] = None
     env_meta["env_kwargs"]["seed"] = 0
+    env_meta["env_kwargs"]["simple"] = True
     print(f"Layout id: {env_meta['env_kwargs']['layout_ids']}")
     print(f"Style id: {env_meta['env_kwargs']['style_ids']}")
 
