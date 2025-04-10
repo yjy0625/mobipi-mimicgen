@@ -3,11 +3,11 @@
     "type": "robosuite",
     "experiment": {
         "source": {
-            "dataset_path": "/juno/u/jingyuny/projects/p_mobilization/third_party/robocasa/datasets/v0.1/single_stage/kitchen_doors/CloseSingleDoor/2024-04-24/demo_gentex_im128_randcams.hdf5",
+            "dataset_path": "~/robocasa/datasets/v0.1/single_stage/kitchen_doors/CloseSingleDoor/2024-04-24/demo_gentex_im128_randcams.hdf5",
             "filter_key": "50_demos"
         },
         "generation": {
-            "path": "/juno/u/jingyuny/projects/p_mobilization/third_party/robocasa/datasets/v0.1/single_stage/kitchen_doors/CloseSingleDoor/mg_nav",
+            "path": "~/robocasa/datasets/v0.1/single_stage/kitchen_doors/CloseSingleDoor/mg_nav",
             "select_src_per_subtask": true,
             "num_trials": 300,
             "transform_first_robot_pose": true,

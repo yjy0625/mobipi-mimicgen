@@ -3,11 +3,11 @@
     "type": "robosuite",
     "experiment": {
         "source": {
-            "dataset_path": "/juno/u/jingyuny/projects/p_mobilization/third_party/robocasa/datasets/v0.1/single_stage/kitchen_stove/TurnOnStove/2024-05-02/demo_gentex_im128_randcams.hdf5",
+            "dataset_path": "~/robocasa/datasets/v0.1/single_stage/kitchen_stove/TurnOnStove/2024-05-02/demo_gentex_im128_randcams.hdf5",
             "filter_key": "50_demos"
         },
         "generation": {
-            "path": "/juno/u/jingyuny/projects/p_mobilization/third_party/robocasa/datasets/v0.1/single_stage/kitchen_stove/TurnOnStove/mg_nav",
+            "path": "~/robocasa/datasets/v0.1/single_stage/kitchen_stove/TurnOnStove/mg_nav",
             "select_src_per_subtask": false,
             "num_trials": 300,
             "transform_first_robot_pose": true,
