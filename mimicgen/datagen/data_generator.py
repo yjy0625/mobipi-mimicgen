@@ -19,6 +19,7 @@ from mimicgen.configs.task_spec import MG_TaskSpec
 from mimicgen.datagen.datagen_info import DatagenInfo
 from mimicgen.datagen.selection_strategy import make_selection_strategy
 from mimicgen.datagen.waypoint import WaypointSequence, WaypointTrajectory
+from mimicgen.datagen.rrt_planner import GTCollisionChecker, rrt_planner, check_path_collision
 
 
 class DataGenerator(object):
@@ -245,6 +246,8 @@ class DataGenerator(object):
                 src_demo_labels (np.array): same as @src_demo_inds, but repeated to have a label for each timestep of the trajectory
         """
 
+        col_checker = GTCollisionChecker(env.env)
+
         # sample new task instance
         if run_nav:
             env.base_env.place_robot_for_nav = True
@@ -270,8 +273,8 @@ class DataGenerator(object):
         # optinally run navigation towards station
         if run_nav:
             # interpolation parameters setting max velocity
-            max_rot_per_step = 1.0 / 20 # 1.258 / 20
-            max_dist_per_step = 0.5 / 20 # 0.744 / 20
+            max_rot_per_step = 1.0 / 20
+            max_dist_per_step = 0.5 / 20
             def compute_num_steps(dists):
                 dists[2] = np.mod(dists[2], np.pi * 2) - np.pi # use closest rotation
                 dists = np.abs(dists)
@@ -334,6 +337,37 @@ class DataGenerator(object):
                     action_noise=0.0,
                     skip_interpolation=False
                 )
+
+            # resort to rrt if simple straight-line path does not work
+            if not check_path_collision(col_checker, init_base_pose, target_base_pose, steps=100):
+                print("Straight line path not collision free, using RRT...")
+                path = rrt_planner(
+                    k_col=col_checker,
+                    start=tuple(init_base_pose.tolist()),
+                    goal=tuple(target_base_pose.tolist()),
+                    step_size=0.1,
+                    draw=False
+                )
+
+                traj_to_execute = WaypointTrajectory()
+
+                for i, point in enumerate(path):
+                    if i == 0:
+                        traj_to_execute.add_waypoint_sequence(init_sequence)
+                    else:
+                        waypoint_num_steps = compute_num_steps(
+                            np.array(path[i]) - np.array(path[i - 1])
+                        )
+                        traj_to_execute.add_waypoint_sequence_for_target_pose(
+                            pose=PoseUtils.make_pose(
+                                np.array([point[0], point[1], 0.0]),
+                                T.quat2mat(T.axisangle2quat([0, 0, point[2]])),
+                            ),
+                            gripper_action=nav_gripper_action,
+                            num_steps=waypoint_num_steps,
+                            action_noise=0.0,
+                            skip_interpolation=False
+                        )
 
             # run navigation and collect transition data
             traj_to_execute.pop_first()

@@ -142,6 +142,7 @@ def generate_dataset(
 
     # get environment metadata from dataset
     env_meta = get_env_metadata_from_dataset(dataset_path=source_dataset_path)
+    env_meta["env_kwargs"]["layout_ids"] = [0, 2, 3, 5, 6]
 
     # set seed for generation
     random.seed(mg_config.experiment.seed)
